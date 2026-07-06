@@ -1,0 +1,2 @@
+# Nenhuma dependência externa necessária para máxima portabilidade.
+# O projeto usa apenas a biblioteca padrão do Python.

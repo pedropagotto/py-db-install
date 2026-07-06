@@ -1,0 +1,23 @@
+{
+  "source": {
+    "type": "docker",
+    "container_name": "postgres_source",
+    "host": "localhost",
+    "port": 5432,
+    "database": "minha_db",
+    "user": "postgres",
+    "password_env": "PGPASSWORD_SOURCE"
+  },
+  "target": {
+    "type": "local",
+    "host": "192.168.1.100",
+    "port": 5432,
+    "database": "minha_db",
+    "user": "postgres",
+    "password_env": "PGPASSWORD_TARGET"
+  },
+  "backup": {
+    "file": "/tmp/backup.dump",
+    "format": "custom"
+  }
+}
