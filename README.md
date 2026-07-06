@@ -9,6 +9,20 @@ Projeto simples em Python para facilitar backups e restores de bancos de dados P
   2. Backup de container Docker → Restore direto em outro container Docker.
   3. Backup de servidor PostgreSQL sem container → Restore em outro servidor sem container.
 
+## Ferramenta Principal (pg_main.py)
+O script `pg_main.py` é o entrypoint principal que permite escolher interativamente qual operação executar:
+
+```bash
+python pg_main.py
+```
+
+Opções disponíveis no menu:
+- `1` → Executa `pg_backup_restore.py` (backup, restore ou backup-restore)
+- `2` → Executa `pg_install.py` (instalação do PostgreSQL)
+- `0` → Sai da ferramenta
+
+Você também pode passar argumentos extras: `python pg_main.py --help` (serão repassados ao script escolhido).
+
 ## Instalação do PostgreSQL (Debian/Ubuntu)
 O script `pg_install.py` automatiza a instalação completa do PostgreSQL em servidores Debian ou Ubuntu:
 
@@ -42,6 +56,7 @@ database-pg/
 ├── config.example.json
 ├── pg_backup_restore.py
 ├── pg_install.py
+├── pg_main.py
 └── .env.example
 ```
 
