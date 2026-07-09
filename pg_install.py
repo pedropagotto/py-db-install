@@ -189,7 +189,7 @@ def main():
     parser.add_argument("--database", default=None, help="Nome do banco (padrão: app_db)")
     parser.add_argument("--password", default=None, help="Senha (será solicitada interativamente se omitida; gerada aleatória se vazia)")
     parser.add_argument("--skip-install", action="store_true", help="Pula a instalação (assume já instalado)")
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
 
     # Solicita senha interativamente se não informada via CLI (senha não ecoa no terminal)
     if not args.password:

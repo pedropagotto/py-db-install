@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Database PG - Ferramenta Principal (Main Tool)
-Permite escolher qual operação executar: Backup/Restore ou Instalação do PostgreSQL.
+Database PG - Ferramenta Principal All-in-One (Main Tool)
+Permite escolher qual operação executar: Backup/Restore, Instalação do PostgreSQL,
+Instalação do Docker, Instalação do Kamal ou Instalação Completa All-in-One.
 Uso: python pg_main.py
 """
 
@@ -10,58 +11,201 @@ import sys
 from pathlib import Path
 
 
+def filter_args(args):
+    """Filtra argumentos de controle principais para não passar aos sub-scripts."""
+    if args is None:
+        return []
+    control_args = {
+        "--all", "--install-all", "-aio",
+        "--postgres", "--install-postgres",
+        "--docker", "--install-docker",
+        "--kamal", "--install-kamal"
+    }
+    return [arg for arg in args if arg not in control_args]
+
+
 def print_menu():
     """Exibe o menu principal de opções."""
-    print("\n" + "=" * 50)
-    print("DATABASE PG - FERRAMENTA PRINCIPAL")
-    print("=" * 50)
+    print("\n" + "=" * 60)
+    print("DATABASE PG - FERRAMENTA PRINCIPAL ALL-IN-ONE")
+    print("=" * 60)
     print("Escolha a operação que deseja executar:")
     print("  1. Backup / Restore de PostgreSQL")
-    print("  2. Instalar PostgreSQL (Debian/Ubuntu)")
+    print("  2. Instalar PostgreSQL completo pronto para produção")
+    print("  3. Instalar Docker CE (Debian/Ubuntu)")
+    print("  4. Instalar Kamal (Debian/Ubuntu)")
+    print("  5. Instalação Completa All-in-One (PostgreSQL + Docker + Kamal)")
     print("  0. Sair")
-    print("=" * 50)
+    print("=" * 60)
 
 
-def run_backup_restore():
+def run_backup_restore(extra_args=None):
     """Executa o script de backup/restore."""
     script_path = Path(__file__).parent / "pg_backup_restore.py"
     if not script_path.exists():
         print("[ERRO] pg_backup_restore.py não encontrado!")
-        return
+        return False
 
     print("\n[INFO] Iniciando ferramenta de Backup/Restore...")
     print("[INFO] Use --help para ver as opções de subcomandos (backup, restore, backup-restore)\n")
 
-    # Passa os argumentos extras para o script filho
-    cmd = [sys.executable, str(script_path)] + sys.argv[1:]
+    args = extra_args if extra_args is not None else sys.argv[1:]
+    cmd = [sys.executable, str(script_path)] + filter_args(args)
     try:
         subprocess.run(cmd, check=False)
+        return True
     except KeyboardInterrupt:
         print("\n[INFO] Operação interrompida pelo usuário.")
+        return False
 
 
-def run_install():
+def run_install(extra_args=None):
     """Executa o script de instalação do PostgreSQL."""
     script_path = Path(__file__).parent / "pg_install.py"
     if not script_path.exists():
         print("[ERRO] pg_install.py não encontrado!")
-        return
+        return False
 
     print("\n[INFO] Iniciando instalador do PostgreSQL...")
     print("[AVISO] Esta operação geralmente requer sudo/root.\n")
 
-    cmd = [sys.executable, str(script_path)] + sys.argv[1:]
+    args = extra_args if extra_args is not None else sys.argv[1:]
+    cmd = [sys.executable, str(script_path)] + filter_args(args)
     try:
-        subprocess.run(cmd, check=False)
+        proc = subprocess.run(cmd, check=False)
+        return proc.returncode == 0
     except KeyboardInterrupt:
         print("\n[INFO] Operação interrompida pelo usuário.")
+        return False
+
+
+def run_docker_install(extra_args=None, skip_reboot=False):
+    """Executa o script de instalação do Docker."""
+    script_path = Path(__file__).parent / "docker_install.py"
+    if not script_path.exists():
+        print("[ERRO] docker_install.py não encontrado!")
+        return False
+
+    print("\n[INFO] Iniciando instalador do Docker...")
+    print("[AVISO] Esta operação requer sudo/root.\n")
+
+    args = extra_args if extra_args is not None else sys.argv[1:]
+    filtered = filter_args(args)
+    # Se for All-in-One, precisamos passar --no-reboot
+    if skip_reboot and "--no-reboot" not in filtered:
+        filtered.append("--no-reboot")
+
+    cmd = [sys.executable, str(script_path)] + filtered
+    try:
+        proc = subprocess.run(cmd, check=False)
+        return proc.returncode == 0
+    except KeyboardInterrupt:
+        print("\n[INFO] Operação interrompida pelo usuário.")
+        return False
+
+
+def run_kamal_install(extra_args=None):
+    """Executa o script de instalação do Kamal."""
+    script_path = Path(__file__).parent / "kamal_install.py"
+    if not script_path.exists():
+        print("[ERRO] kamal_install.py não encontrado!")
+        return False
+
+    print("\n[INFO] Iniciando instalador do Kamal...")
+    print("[AVISO] Esta operação requer sudo/root.\n")
+
+    args = extra_args if extra_args is not None else sys.argv[1:]
+    cmd = [sys.executable, str(script_path)] + filter_args(args)
+    try:
+        proc = subprocess.run(cmd, check=False)
+        return proc.returncode == 0
+    except KeyboardInterrupt:
+        print("\n[INFO] Operação interrompida pelo usuário.")
+        return False
+
+
+def run_all_in_one():
+    """Executa a instalação sequencial de todos os componentes (Docker, Kamal, PostgreSQL)."""
+    print("\n" + "=" * 60)
+    print("INICIANDO INSTALAÇÃO COMPLETA ALL-IN-ONE (AIO)")
+    print("=" * 60)
+    print("Esta operação irá instalar de forma otimizada para produção:")
+    print("  1. Docker CE (e configurar seu usuário)")
+    print("  2. Ruby e Kamal")
+    print("  3. PostgreSQL (banco de dados completo, usuário e teste de conexão)")
+    print("=" * 60 + "\n")
+
+    # Passamos sys.argv[1:] para os scripts para preservar flags como --skip-install
+    extra_args = sys.argv[1:]
+
+    # Passo 1: Docker (forçando skip de reboot imediato)
+    print("\n>>> [PASSO 1/3] Instalação do Docker CE...")
+    docker_ok = run_docker_install(extra_args=extra_args, skip_reboot=True)
+    if not docker_ok:
+        print("[ERRO] Falha na instalação do Docker. Abortando instalação All-in-One.")
+        return
+
+    # Passo 2: Kamal
+    print("\n>>> [PASSO 2/3] Instalação do Kamal...")
+    kamal_ok = run_kamal_install(extra_args=extra_args)
+    if not kamal_ok:
+        print("[ERRO] Falha na instalação do Kamal. Abortando instalação All-in-One.")
+        return
+
+    # Passo 3: PostgreSQL
+    print("\n>>> [PASSO 3/3] Instalação do PostgreSQL completo...")
+    pg_ok = run_install(extra_args=extra_args)
+    if not pg_ok:
+        print("[AVISO] Houve um problema na instalação ou teste do PostgreSQL.")
+        # Não abortamos, pois os anteriores já foram instalados.
+
+    print("\n" + "=" * 60)
+    print("[SUCCESS] INSTALAÇÃO COMPLETA ALL-IN-ONE CONCLUÍDA!")
+    print("=" * 60)
+    print("Todos os componentes (Docker, Kamal, PostgreSQL) foram processados.")
+    print("============================================================\n")
+
+    # Se o Docker foi instalado, sugere reinicialização no final
+    if "--skip-install" not in filter_args(extra_args):
+        try:
+            confirm = input("Deseja reiniciar o sistema agora para aplicar as permissões do Docker? (s/N): ").strip().lower()
+            if confirm in ("s", "sim", "y", "yes"):
+                print("[INFO] Reiniciando o sistema em 5 segundos...")
+                import time
+                time.sleep(5)
+                subprocess.run(["systemctl", "reboot"], check=False)
+            else:
+                print("[INFO] Reinicialização ignorada. Lembre-se de reiniciar manualmente depois.")
+        except (EOFError, KeyboardInterrupt):
+            print("\n[INFO] Reinicialização ignorada.")
 
 
 def main():
+    # Roteamento direto se argumentos de ação forem passados pela CLI
+    if len(sys.argv) > 1:
+        first_arg = sys.argv[1]
+        if first_arg in ("--install-postgres", "--postgres"):
+            run_install(sys.argv[2:])
+            return
+        elif first_arg in ("--install-docker", "--docker"):
+            run_docker_install(sys.argv[2:])
+            return
+        elif first_arg in ("--install-kamal", "--kamal"):
+            run_kamal_install(sys.argv[2:])
+            return
+        elif first_arg in ("--install-all", "--all", "-aio"):
+            run_all_in_one()
+            return
+        elif first_arg in ("--backup-restore", "--backup", "--restore", "backup", "restore"):
+            # Repassa tudo para o backup_restore
+            run_backup_restore(sys.argv[1:])
+            return
+
+    # Caso contrário, exibe o menu interativo
     while True:
         print_menu()
         try:
-            choice = input("Digite sua escolha [0-2]: ").strip()
+            choice = input("Digite sua escolha [0-5]: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\nSaindo...")
             break
@@ -70,6 +214,12 @@ def main():
             run_backup_restore()
         elif choice == "2":
             run_install()
+        elif choice == "3":
+            run_docker_install()
+        elif choice == "4":
+            run_kamal_install()
+        elif choice == "5":
+            run_all_in_one()
         elif choice == "0":
             print("Saindo da ferramenta principal. Até logo!")
             break

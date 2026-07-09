@@ -9,25 +9,36 @@ Projeto simples em Python para facilitar backups e restores de bancos de dados P
   2. Backup de container Docker → Restore direto em outro container Docker.
   3. Backup de servidor PostgreSQL sem container → Restore em outro servidor sem container.
 
-## Ferramenta Principal (pg_main.py)
-O script `pg_main.py` é o entrypoint principal que permite escolher interativamente qual operação executar:
+## Ferramenta Principal All-in-One (pg_main.py)
+O script `pg_main.py` é o entrypoint principal da ferramenta unificada. Ele permite escolher interativamente qual operação executar ou acionar as ações diretamente via argumentos de linha de comando:
 
 ```bash
-python pg_main.py
+python3 pg_main.py
 ```
 
-Opções disponíveis no menu:
-- `1` → Executa `pg_backup_restore.py` (backup, restore ou backup-restore)
-- `2` → Executa `pg_install.py` (instalação do PostgreSQL)
-- `0` → Sai da ferramenta
+### Menu Interativo:
+- `1` → **Backup / Restore de PostgreSQL** (`pg_backup_restore.py`)
+- `2` → **Instalar PostgreSQL** completo pronto para produção (`pg_install.py`)
+- `3` → **Instalar Docker CE** de forma otimizada (`docker_install.py`)
+- `4` → **Instalar Kamal** via Ruby/gem (`kamal_install.py`)
+- `5` → **Instalação Completa All-in-One (AIO)**: Instala e configura Docker, Kamal e PostgreSQL sequencialmente, realizando testes de conexão e sugerindo reinicialização ao final.
+- `0` → **Sair**
 
-Você também pode passar argumentos extras: `python pg_main.py --help` (serão repassados ao script escolhido).
+### Atalhos via Linha de Comando (CLI):
+Para facilitar a automação em servidores limpos (bare-metal ou VPS), você pode chamar as rotinas diretamente passando argumentos:
+- `--all` / `--install-all` / `-aio` : Executa o assistente de instalação completo All-in-One.
+- `--postgres` / `--install-postgres` : Executa diretamente o instalador do PostgreSQL.
+- `--docker` / `--install-docker` : Executa diretamente o instalador do Docker.
+- `--kamal` / `--install-kamal` : Executa diretamente o instalador do Kamal.
+- `backup` / `restore` / `--backup-restore` : Repassa os argumentos diretamente para a ferramenta de backup e restore.
+
+*Qualquer argumento extra fornecido (ex: `--skip-install`, `--user`, `--password`) será repassado de forma inteligente para os instaladores correspondentes.*
 
 ## Instalação do PostgreSQL (Debian/Ubuntu)
-O script `pg_install.py` automatiza a instalação completa do PostgreSQL em servidores Debian ou Ubuntu:
+O script `pg_install.py` automatiza a instalação completa do PostgreSQL em servidores Debian ou Ubuntu, garantindo que esteja pronto para produção:
 
 ```bash
-sudo python pg_install.py
+sudo python3 pg_install.py
 ```
 
 Opções:
@@ -38,9 +49,47 @@ Opções:
 
 Ao final, o script:
 - Imprime as credenciais (usuário, senha, host, porta, banco)
-- Realiza teste de conexão com `SELECT 1` para confirmar que está funcionando
+- Realiza o teste padrão de conexão com `SELECT 1` para confirmar o funcionamento
+- Oferece a opção de executar um **teste de conexão personalizado** (solicitando host, porta, usuário, senha e banco)
 
 **Nota**: Execute sempre com `sudo`. A senha gerada é exibida apenas uma vez.
+
+## Instalação do Docker CE (Debian/Ubuntu)
+O script `docker_install.py` instala e configura de forma otimizada para produção o Docker Engine, containerd e plugins do Docker Compose no Debian ou Ubuntu:
+
+```bash
+sudo python3 docker_install.py
+```
+
+Funcionalidades:
+- Detecta a distribuição de forma nativa e adiciona os repositórios oficiais e chaves GPG corretas.
+- Solicita interativamente o usuário do sistema (com detecção do usuário que executou o `sudo`) para adicioná-lo aos grupos `docker` e `sudo`, evitando o uso direto do root.
+- Gerencia o processo de reboot opcional e amigável.
+
+## Instalação do Kamal (Debian/Ubuntu)
+O script `kamal_install.py` automatiza a preparação do ambiente Ruby e instala o Kamal:
+
+```bash
+sudo python3 kamal_install.py
+```
+
+Funcionalidades:
+- Instala a versão completa do Ruby (`ruby-full`) e as ferramentas essenciais de compilação de extensões nativas (`build-essential`, `libssl-dev`, etc.).
+- Instala a gem `kamal` de forma global e limpa.
+
+## Instalação Completa All-in-One (AIO)
+A ferramenta permite a instalação coordenada e limpa de todos os recursos de uma só vez:
+
+```bash
+sudo python3 pg_main.py --all
+```
+Ou escolhendo a opção `5` no menu principal.
+
+A instalação All-in-One realiza:
+1. Instalação e configuração completa do Docker CE sem forçar um reboot imediato.
+2. Instalação e configuração do Ruby, pacotes de compilação essenciais e Kamal.
+3. Instalação do PostgreSQL completo pronto para produção com criação de usuário/banco e testes de conexão.
+4. Sugestão amigável de reinicialização do sistema no fim de todo o fluxo.
 
 ## Requisitos
 - Python 3.8+
@@ -87,13 +136,15 @@ python3 pg_backup_restore.py --help
 ## Estrutura do Projeto
 ```
 py-db-install/
-├── README.md
-├── requirements.txt
-├── config.example.json
-├── pg_backup_restore.py
-├── pg_install.py
-├── pg_main.py
-└── .env.example
+├── README.md              # Documentação unificada do projeto
+├── requirements.txt       # Requisitos (vazio, pois o projeto usa apenas a biblioteca padrão)
+├── config.example.json    # Exemplo de configuração para backup/restore
+├── docker_install.py      # Instalador de Docker CE otimizado para Debian/Ubuntu
+├── kamal_install.py       # Instalador de Ruby e Kamal
+├── pg_install.py          # Instalador completo do PostgreSQL para Debian/Ubuntu
+├── pg_backup_restore.py   # Script de Backup e Restore (Docker ou Bare-Metal)
+├── pg_main.py             # Entrypoint da ferramenta interativa e direta All-in-One
+└── .env.example           # Exemplo de variáveis de ambiente para credenciais
 ```
 
 ## Como Usar
