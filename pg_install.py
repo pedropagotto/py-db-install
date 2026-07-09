@@ -135,16 +135,17 @@ def setup_database(args):
     return user, db, password
 
 
-def test_postgres(user, db, password):
+def test_postgres(user, db, password, host="localhost", port=5432):
     """Testa conexão e funcionamento básico."""
-    print("[INFO] Testando conexão com PostgreSQL...")
+    print(f"[INFO] Testando conexão com PostgreSQL em {host}:{port}...")
     env = os.environ.copy()
-    env["PGPASSWORD"] = password
+    if password:
+        env["PGPASSWORD"] = password
 
     try:
         # Testa versão
         version = run_cmd(
-            ["psql", "-U", user, "-d", db, "-h", "localhost", "-p", "5432", "-c", "SELECT version();"],
+            ["psql", "-U", user, "-d", db, "-h", host, "-p", str(port), "-c", "SELECT version();"],
             env=env,
             capture_output=True
         )
@@ -152,7 +153,7 @@ def test_postgres(user, db, password):
 
         # Testa query simples
         run_cmd(
-            ["psql", "-U", user, "-d", db, "-h", "localhost", "-p", "5432", "-c", "SELECT 1 AS test;"],
+            ["psql", "-U", user, "-d", db, "-h", host, "-p", str(port), "-c", "SELECT 1 AS test;"],
             env=env
         )
 
@@ -207,8 +208,35 @@ def main():
 
     print_credentials(user, password, db=db)
 
+    # Solicita se deseja realizar teste de conexão personalizado
+    try:
+        opcao = input("Deseja realizar um teste de conexão personalizado? (s/n): ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        opcao = "n"
+
+    if opcao in ("s", "sim", "y", "yes"):
+        print("\n=== Teste de Conexão Personalizado ===")
+        try:
+            host = input("Host (padrão: localhost): ").strip() or "localhost"
+            port_str = input("Porta (padrão: 5432): ").strip() or "5432"
+            try:
+                port = int(port_str)
+            except ValueError:
+                port = 5432
+            user_input = input(f"Usuário (padrão: {user}): ").strip() or user
+            senha = getpass.getpass("Senha (deixe vazio para usar a criada na instalação): ")
+            if not senha:
+                senha = password
+            banco = input(f"Banco de dados (padrão: {db}): ").strip() or db
+
+            custom_test_ok = test_postgres(user_input, banco, senha, host=host, port=port)
+            if not custom_test_ok:
+                print("[AVISO] O teste de conexão personalizado falhou.")
+        except (EOFError, KeyboardInterrupt):
+            print("\n[INFO] Teste de conexão personalizado cancelado pelo usuário.")
+
     if not test_ok:
-        print("[AVISO] O teste falhou, mas a instalação pode estar ok. Verifique manualmente.")
+        print("[AVISO] O teste padrão falhou, mas a instalação pode estar ok. Verifique manualmente.")
         sys.exit(1)
 
 
