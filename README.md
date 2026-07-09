@@ -10,11 +10,29 @@ Projeto simples em Python para facilitar backups e restores de bancos de dados P
   3. Backup de servidor PostgreSQL sem container → Restore em outro servidor sem container.
 
 ## Ferramenta Principal All-in-One (pg_main.py)
-O script `pg_main.py` é o entrypoint principal da ferramenta unificada. Ele permite escolher interativamente qual operação executar ou acionar as ações diretamente via argumentos de linha de comando:
+O script `pg_main.py` é o entrypoint principal da ferramenta unificada. Ele permite escolher interativamente qual operação executar ou acionar as ações diretamente via argumentos de linha de comando.
+
+Para maior facilidade e rapidez, o projeto conta com suporte a **Make**. Para iniciar o menu interativo de escolha, basta executar:
+
+```bash
+make start
+```
+
+Ou de forma tradicional:
 
 ```bash
 python3 pg_main.py
 ```
+
+### Comandos de Atalho (Makefile):
+Se preferir, utilize os comandos simplificados via `make` para agilizar a execução de tarefas comuns:
+- `make start` : Inicia o menu interativo (`pg_main.py`).
+- `make install-postgres` : Executa o instalador do PostgreSQL (requer sudo).
+- `make install-docker` : Executa o instalador do Docker CE (requer sudo).
+- `make install-kamal` : Executa o instalador do Kamal (requer sudo).
+- `make install-all` : Executa o instalador All-in-One completo (requer sudo).
+- `make backup-restore` : Executa a ferramenta de Backup/Restore.
+- `make help` : Exibe a lista de comandos do Makefile disponíveis.
 
 ### Menu Interativo:
 - `1` → **Backup / Restore de PostgreSQL** (`pg_backup_restore.py`)
@@ -118,7 +136,13 @@ cd py-db-install
 
 3. Nenhuma instalação via pip é necessária — o projeto usa apenas a biblioteca padrão do Python (sem dependências externas, conforme `requirements.txt`).
 
-4. Execute a ferramenta:
+4. Execute a ferramenta utilizando o Make (ou diretamente com Python):
+
+```bash
+make start
+```
+
+Ou de forma tradicional:
 
 ```bash
 python3 pg_main.py
@@ -137,6 +161,7 @@ python3 pg_backup_restore.py --help
 ```
 py-db-install/
 ├── README.md              # Documentação unificada do projeto
+├── Makefile               # Atalhos para comandos comuns (make start, make install-all, etc.)
 ├── requirements.txt       # Requisitos (vazio, pois o projeto usa apenas a biblioteca padrão)
 ├── config.example.json    # Exemplo de configuração para backup/restore
 ├── docker_install.py      # Instalador de Docker CE otimizado para Debian/Ubuntu
