@@ -68,6 +68,138 @@ def configure_firewall():
     print("[AVISO] Firewall não configurado automaticamente. Libere manualmente a porta 5432/tcp se o firewall estiver ativo.")
 
 
+def configure_external_access():
+    """Configura o PostgreSQL para permitir conexões externas (postgresql.conf e pg_hba.conf)."""
+    print("[INFO] Configurando PostgreSQL para permitir conexões externas...")
+
+    # 1. Obter caminhos dos arquivos de configuração através do psql
+    config_file = None
+    hba_file = None
+    try:
+        config_file = run_cmd(
+            ["sudo", "-u", "postgres", "psql", "-t", "-P", "format=unaligned", "-c", "SHOW config_file;"],
+            capture_output=True
+        )
+        hba_file = run_cmd(
+            ["sudo", "-u", "postgres", "psql", "-t", "-P", "format=unaligned", "-c", "SHOW hba_file;"],
+            capture_output=True
+        )
+    except Exception as e:
+        print(f"[AVISO] Não foi possível obter os arquivos de configuração via psql: {e}")
+
+    # Fallback caso psql falhe ou não retorne arquivos válidos
+    if not config_file or not hba_file or not os.path.exists(config_file) or not os.path.exists(hba_file):
+        print("[INFO] Tentando caminhos padrão de detecção baseada em diretórios...")
+        config_file = None
+        hba_file = None
+        pg_dir = "/etc/postgresql"
+        if os.path.exists(pg_dir):
+            versions = sorted(os.listdir(pg_dir), reverse=True)
+            for version in versions:
+                main_dir = os.path.join(pg_dir, version, "main")
+                if os.path.isdir(main_dir):
+                    config_file = os.path.join(main_dir, "postgresql.conf")
+                    hba_file = os.path.join(main_dir, "pg_hba.conf")
+                    break
+
+    if not config_file or not hba_file or not os.path.exists(config_file) or not os.path.exists(hba_file):
+        print("[ERRO] Arquivos postgresql.conf ou pg_hba.conf não foram encontrados. Configuração de acesso externo pulada.")
+        return False
+
+    print(f"[INFO] Caminho detectado para postgresql.conf: {config_file}")
+    print(f"[INFO] Caminho detectado para pg_hba.conf: {hba_file}")
+
+    # 2. Modificar postgresql.conf para habilitar listen_addresses = '*'
+    try:
+        with open(config_file, "r") as f:
+            lines = f.readlines()
+
+        configured = False
+        for line in lines:
+            cleaned = line.strip().replace(" ", "").replace('"', "'")
+            if cleaned.startswith("#"):
+                continue
+            if "listen_addresses='*'" in cleaned or "listen_addresses='localhost,*'" in cleaned or "listen_addresses='*,localhost'" in cleaned:
+                configured = True
+                break
+
+        if not configured:
+            print("[INFO] Configurando listen_addresses = '*' em postgresql.conf...")
+            with open(config_file, "a") as f:
+                f.write("\n# Habilitar conexões externas adicionado pelo instalador\nlisten_addresses = '*'\n")
+            print("[SUCCESS] listen_addresses configurado para '*' com sucesso.")
+        else:
+            print("[INFO] listen_addresses já está configurado para '*' em postgresql.conf.")
+    except Exception as e:
+        print(f"[ERRO] Falha ao modificar postgresql.conf: {e}")
+        return False
+
+    # 3. Modificar pg_hba.conf para permitir 0.0.0.0/0 e ::/0
+    try:
+        with open(hba_file, "r") as f:
+            hba_content = f.read()
+
+        # Detecta o método de autenticação preferido (scram-sha-256 ou md5)
+        auth_method = None
+        for line in hba_content.splitlines():
+            cleaned = line.strip()
+            if cleaned.startswith("#") or not cleaned:
+                continue
+            if "scram-sha-256" in cleaned:
+                auth_method = "scram-sha-256"
+                break
+            elif "md5" in cleaned:
+                auth_method = "md5"
+
+        if not auth_method:
+            if "scram-sha-256" in hba_content:
+                auth_method = "scram-sha-256"
+            elif "md5" in hba_content:
+                auth_method = "md5"
+            else:
+                auth_method = "scram-sha-256"
+
+        print(f"[INFO] Método de autenticação selecionado para regras externas: {auth_method}")
+
+        has_ipv4_rule = False
+        has_ipv6_rule = False
+        for line in hba_content.splitlines():
+            cleaned = line.strip()
+            if cleaned.startswith("#") or not cleaned:
+                continue
+            parts = cleaned.split()
+            if len(parts) >= 5 and parts[0].startswith("host"):
+                if "0.0.0.0/0" in parts[3]:
+                    has_ipv4_rule = True
+                if "::/0" in parts[3]:
+                    has_ipv6_rule = True
+
+        if not has_ipv4_rule or not has_ipv6_rule:
+            print(f"[INFO] Adicionando regras de acesso externo (0.0.0.0/0 e ::/0) ao pg_hba.conf...")
+            with open(hba_file, "a") as f:
+                f.write("\n# Regras de acesso externo adicionadas pelo instalador\n")
+                if not has_ipv4_rule:
+                    f.write(f"host    all             all             0.0.0.0/0               {auth_method}\n")
+                if not has_ipv6_rule:
+                    f.write(f"host    all             all             ::/0                    {auth_method}\n")
+            print("[SUCCESS] Regras de acesso externo adicionadas ao pg_hba.conf.")
+        else:
+            print("[INFO] Regras de acesso externo já presentes no pg_hba.conf.")
+    except Exception as e:
+        print(f"[ERRO] Falha ao modificar pg_hba.conf: {e}")
+        return False
+
+    # 4. Reiniciar o serviço PostgreSQL
+    try:
+        print("[INFO] Reiniciando o serviço do PostgreSQL para aplicar as alterações...")
+        run_cmd(["systemctl", "restart", "postgresql"])
+        print("[SUCCESS] Serviço PostgreSQL reiniciado com sucesso!")
+        return True
+    except Exception as e:
+        print(f"[ERRO] Falha ao reiniciar o serviço PostgreSQL: {e}")
+        return False
+
+
 def run_cmd(cmd, check=True, capture_output=False, env=None):
     """Executa comando com output amigável."""
     print(f"[INFO] Executando: {' '.join(cmd)}")
@@ -204,6 +336,12 @@ def main():
         install_postgres(args)
 
     user, db, password = setup_database(args)
+
+    if os.geteuid() == 0:
+        configure_external_access()
+    else:
+        print("[INFO] Executando sem privilégios de root. Ignorando a configuração de acesso externo ao PostgreSQL.")
+
     test_ok = test_postgres(user, db, password)
 
     print_credentials(user, password, db=db)

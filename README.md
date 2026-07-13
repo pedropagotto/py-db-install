@@ -66,6 +66,7 @@ Opções:
 - `--skip-install` : pula instalação (útil para configurar apenas usuário/banco)
 
 Ao final, o script:
+- Configura de forma robusta e automática o acesso externo do PostgreSQL (ajustando `postgresql.conf` para `listen_addresses = '*'` e adicionando as permissões adequadas em `pg_hba.conf` para IPv4 e IPv6).
 - Imprime as credenciais (usuário, senha, host, porta, banco)
 - Realiza o teste padrão de conexão com `SELECT 1` para confirmar o funcionamento
 - Oferece a opção de executar um **teste de conexão personalizado** (solicitando host, porta, usuário, senha e banco)
