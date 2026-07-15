@@ -21,7 +21,8 @@ def filter_args(args):
         "--docker", "--install-docker",
         "--kamal", "--install-kamal",
         "--portainer", "--install-portainer",
-        "--kamal-ssl", "--config-kamal-ssl"
+        "--kamal-ssl", "--config-kamal-ssl",
+        "--reset-passwords", "--reset-password"
     }
     return [arg for arg in args if arg not in control_args]
 
@@ -39,6 +40,7 @@ def print_menu():
     print("  5. Instalar Portainer CE (Debian/Ubuntu)")
     print("  6. Instalação Completa All-in-One (PostgreSQL + Docker + Kamal + Portainer)")
     print("  7. Configurar SSL Let's Encrypt no Kamal (Compartilhável)")
+    print("  8. Recuperar / Resetar senhas de usuários PostgreSQL")
     print("  0. Sair")
     print("=" * 60)
 
@@ -75,6 +77,26 @@ def run_install(extra_args=None):
 
     args = extra_args if extra_args is not None else sys.argv[1:]
     cmd = [sys.executable, str(script_path)] + filter_args(args)
+    try:
+        proc = subprocess.run(cmd, check=False)
+        return proc.returncode == 0
+    except KeyboardInterrupt:
+        print("\n[INFO] Operação interrompida pelo usuário.")
+        return False
+
+
+def run_reset_passwords(extra_args=None):
+    """Executa o script de instalação do PostgreSQL no modo de reset de senhas."""
+    script_path = Path(__file__).parent / "pg_install.py"
+    if not script_path.exists():
+        print("[ERRO] pg_install.py não encontrado!")
+        return False
+
+    print("\n[INFO] Iniciando reconfiguração de senhas do PostgreSQL...")
+    print("[AVISO] Esta operação pode requerer sudo/root se o acesso peer estiver bloqueado.\n")
+
+    args = extra_args if extra_args is not None else sys.argv[1:]
+    cmd = [sys.executable, str(script_path), "--reset-passwords"] + filter_args(args)
     try:
         proc = subprocess.run(cmd, check=False)
         return proc.returncode == 0
@@ -250,6 +272,9 @@ def main():
         elif first_arg in ("--config-kamal-ssl", "--kamal-ssl"):
             run_kamal_ssl_config(sys.argv[2:])
             return
+        elif first_arg in ("--reset-passwords", "--reset-password"):
+            run_reset_passwords(sys.argv[2:])
+            return
         elif first_arg in ("--install-all", "--all", "-aio"):
             run_all_in_one()
             return
@@ -281,6 +306,8 @@ def main():
             run_all_in_one()
         elif choice == "7":
             run_kamal_ssl_config()
+        elif choice == "8":
+            run_reset_passwords()
         elif choice == "0":
             print("Saindo da ferramenta principal. Até logo!")
             break
