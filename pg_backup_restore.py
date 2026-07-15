@@ -78,14 +78,65 @@ def prompt_backup_path():
     return path
 
 
+def run_pg_tool(tool_name, cmd_args, password=None, input_file=None, output_file=None):
+    """
+    Executa um comando do Postgres (pg_dump, pg_restore, psql).
+    Tenta executar localmente. Se não encontrar o executável local, tenta executar via docker run.
+    """
+    # 1. Tenta localmente
+    if shutil.which(tool_name) is not None:
+        cmd = [tool_name] + cmd_args
+        env = get_pg_env(password)
+        if input_file:
+            print(f"[INFO] Executando local: {' '.join(cmd)} < {input_file}")
+            with open(input_file, "rb") as f_in:
+                subprocess.run(cmd, env=env, stdin=f_in, check=True)
+        elif output_file:
+            print(f"[INFO] Executando local: {' '.join(cmd)} > {output_file}")
+            with open(output_file, "wb") as f_out:
+                subprocess.run(cmd, env=env, stdout=f_out, check=True)
+        else:
+            print(f"[INFO] Executando local: {' '.join(cmd)}")
+            subprocess.run(cmd, env=env, check=True)
+        return
+
+    # 2. Se não tiver local, tenta via docker run
+    if shutil.which("docker") is not None:
+        print(f"[AVISO] '{tool_name}' não encontrado localmente. Tentando executar via container Docker temporário...")
+        docker_cmd = ["docker", "run", "--rm", "-i"]
+        if password:
+            docker_cmd.extend(["-e", f"PGPASSWORD={password}"])
+        
+        # Conecta na rede do host para acessar localhost do próprio host de forma transparente
+        docker_cmd.append("--network=host")
+        docker_cmd.extend(["postgres:latest", tool_name])
+        docker_cmd.extend(cmd_args)
+
+        if input_file:
+            print(f"[INFO] Executando via Docker: {' '.join(docker_cmd)} < {input_file}")
+            with open(input_file, "rb") as f_in:
+                subprocess.run(docker_cmd, stdin=f_in, check=True)
+        elif output_file:
+            print(f"[INFO] Executando via Docker: {' '.join(docker_cmd)} > {output_file}")
+            with open(output_file, "wb") as f_out:
+                subprocess.run(docker_cmd, stdout=f_out, check=True)
+        else:
+            print(f"[INFO] Executando via Docker: {' '.join(docker_cmd)}")
+            subprocess.run(docker_cmd, check=True)
+        return
+
+    raise FileNotFoundError(
+        f"Não foi possível encontrar '{tool_name}' localmente nem o comando 'docker' para executar o fallback."
+    )
+
+
 def do_backup(args):
     """Realiza backup usando pg_dump."""
     source = args.source
     backup_file = args.backup_file
     fmt = args.format
 
-    pg_dump_cmd = [
-        "pg_dump",
+    pg_dump_cmd_args = [
         "-U", source["user"],
         "-h", source.get("host", "localhost"),
         "-p", str(source.get("port", 5432)),
@@ -96,8 +147,7 @@ def do_backup(args):
     ]
 
     if source["type"] == "docker":
-        cmd = build_docker_cmd(source["container_name"], pg_dump_cmd, source.get("password"))
-        # Redirecionar saída para arquivo
+        cmd = build_docker_cmd(source["container_name"], ["pg_dump"] + pg_dump_cmd_args, source.get("password"))
         print(f"[INFO] Backup do container {source['container_name']} para {backup_file}")
         with open(backup_file, "wb") as f:
             env = get_pg_env(source.get("password"))
@@ -113,9 +163,7 @@ def do_backup(args):
                 sys.exit(1)
     else:
         # local / remote server
-        env = get_pg_env(source.get("password"))
-        full_cmd = pg_dump_cmd + ["-f", backup_file]
-        run_command(full_cmd, env=env)
+        run_pg_tool("pg_dump", pg_dump_cmd_args, source.get("password"), output_file=backup_file)
 
     print(f"[SUCCESS] Backup concluído: {backup_file}")
 
@@ -127,38 +175,34 @@ def do_restore(args):
     fmt = args.format
 
     if fmt == "custom":
-        pg_restore_cmd = [
-            "pg_restore",
+        pg_restore_cmd_args = [
             "-U", target["user"],
             "-h", target.get("host", "localhost"),
             "-p", str(target.get("port", 5432)),
             "-d", target["database"],
             "-v",
             "--clean",
-            "--if-exists",
-            backup_file
+            "--if-exists"
         ]
         if target["type"] == "docker":
-            cmd = build_docker_cmd(target["container_name"], pg_restore_cmd, target.get("password"))
+            cmd = build_docker_cmd(target["container_name"], ["pg_restore"] + pg_restore_cmd_args + [backup_file], target.get("password"))
             run_command(cmd, env=get_pg_env(target.get("password")))
         else:
-            run_command(pg_restore_cmd, env=get_pg_env(target.get("password")))
+            run_pg_tool("pg_restore", pg_restore_cmd_args, target.get("password"), input_file=backup_file)
     else:
         # plain SQL - usa psql
-        psql_cmd = [
-            "psql",
+        psql_cmd_args = [
             "-U", target["user"],
             "-h", target.get("host", "localhost"),
             "-p", str(target.get("port", 5432)),
             "-d", target["database"],
-            "-v",
-            "-f", backup_file
+            "-v"
         ]
         if target["type"] == "docker":
-            cmd = build_docker_cmd(target["container_name"], psql_cmd, target.get("password"))
+            cmd = build_docker_cmd(target["container_name"], ["psql"] + psql_cmd_args + ["-f", backup_file], target.get("password"))
             run_command(cmd, env=get_pg_env(target.get("password")))
         else:
-            run_command(psql_cmd, env=get_pg_env(target.get("password")))
+            run_pg_tool("psql", psql_cmd_args, target.get("password"), input_file=backup_file)
 
     print(f"[SUCCESS] Restore concluído no alvo.")
 
