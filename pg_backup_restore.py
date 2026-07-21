@@ -49,20 +49,29 @@ def build_docker_cmd(container, pg_cmd, password=None):
 
 
 def prompt_connection_details(prefix):
-    """Solicita interativamente os dados de conexão do servidor (host, porta, usuário, senha)."""
-    role = "Backup" if prefix == "source" else "Restore"
+    """Solicita interativamente os dados de conexão do servidor (host, porta, banco de dados, usuário, senha)."""
+    role = "Backup (Origem)" if prefix == "source" else "Restore (Destino)"
     print(f"\n=== Servidor de {role} ===")
-    host = input("1- host: ").strip() or "localhost"
-    port_str = input("2- porta: ").strip() or "5432"
+    host = input("1- Host/IP: ").strip() or "localhost"
+    
+    port_str = input("2- Porta (padrão 5432): ").strip() or "5432"
     try:
         port = int(port_str)
     except ValueError:
         port = 5432
-    user = input("3- usuario: ").strip() or "postgres"
-    password = getpass.getpass("4- senha: ")
+        
+    db = input("3- Nome do Banco de Dados (Database): ").strip()
+    while not db:
+        print("[ERRO] Nome do banco de dados é obrigatório.")
+        db = input("3- Nome do Banco de Dados (Database): ").strip()
+
+    user = input("4- Usuário (padrão postgres): ").strip() or "postgres"
+    password = getpass.getpass("5- Senha: ")
+    
     return {
         "host": host,
         "port": port,
+        "database": db,
         "user": user,
         "password": password if password else None
     }
@@ -257,16 +266,17 @@ def run_interactive():
     print("DATABASE PG - MIGRAÇÃO E BACKUP INTERATIVO")
     print("=" * 60)
     print("Escolha o método de cópia/migração:")
-    print("  1. Backup de Docker para arquivo local + Restore no servidor físico (2 etapas)")
-    print("  2. Backup + Restore Direto (Streaming direto sem arquivo intermediário)")
+    print("  1. Backup de Servidor Remoto/Físico para Arquivo Local + Restore (2 etapas)")
+    print("  2. Backup + Restore Direto entre Servidores (Físicos, RDS/Aurora, VPS, etc.)")
+    print("  3. Migração envolvendo Docker Container")
     print("=" * 60)
     try:
-        escolha = input("Escolha uma opção [1-2]: ").strip()
+        escolha = input("Escolha uma opção [1-3]: ").strip()
     except (EOFError, KeyboardInterrupt):
         print("\n[INFO] Operação cancelada.")
         sys.exit(0)
 
-    if escolha not in ["1", "2"]:
+    if escolha not in ["1", "2", "3"]:
         print("[ERRO] Opção inválida.")
         sys.exit(1)
 
@@ -296,59 +306,42 @@ def run_interactive():
         }
 
     def prompt_conn_physical(role):
-        print(f"\n--- Dados de Conexão do PostgreSQL (Servidor Físico de {role}) ---")
-        host = input("Host/IP do servidor: ").strip()
-        while not host:
-            print("[ERRO] Host/IP é obrigatório.")
-            host = input("Host/IP do servidor: ").strip()
-            
-        port_str = input("Porta (padrão: 5432): ").strip() or "5432"
-        try:
-            port = int(port_str)
-        except ValueError:
-            port = 5432
-            
-        db = input("Nome do banco de dados: ").strip()
-        while not db:
-            print("[ERRO] Nome do banco de dados é obrigatório.")
-            db = input("Nome do banco de dados: ").strip()
-            
-        user = input("Usuário (padrão: postgres): ").strip() or "postgres"
-        password = getpass.getpass("Senha: ")
-        
-        return {
-            "type": "local",
-            "container_name": None,
-            "host": host,
-            "port": port,
-            "database": db,
-            "user": user,
-            "password": password if password else None
-        }
+        return prompt_connection_details("source" if role == "Origem" else "target")
 
     args = argparse.Namespace()
     args.format = "custom"
 
     if escolha == "1":
-        # 2 etapas
+        # 2 etapas bare-metal / remoto
         args.command = "backup"
-        args.source = prompt_conn_docker("Origem")
+        args.source = prompt_conn_physical("Origem")
         args.backup_file = prompt_backup_path()
         print("\n[INFO] Iniciando Etapa 1/2: Gerando arquivo de backup...")
         do_backup(args)
         
         args.command = "restore"
         args.target = prompt_conn_physical("Destino")
-        print("\n[INFO] Iniciando Etapa 2/2: Restaurando no servidor físico...")
+        print("\n[INFO] Iniciando Etapa 2/2: Restaurando no servidor de destino...")
         do_restore(args)
         
         args.func = lambda x: print("\n[SUCCESS] Migração em duas etapas concluída com sucesso!")
 
     elif escolha == "2":
-        # Direto / Streaming
+        # Direto / Streaming entre servidores físicos/remotos
         args.command = "backup-restore"
-        args.source = prompt_conn_docker("Origem")
+        args.source = prompt_conn_physical("Origem")
         args.target = prompt_conn_physical("Destino")
+        args.func = do_backup_restore
+
+    elif escolha == "3":
+        print("\nConfiguração de Docker:")
+        s_type = input("Origem é Docker? (s/N): ").strip().lower()
+        args.source = prompt_conn_docker("Origem") if s_type in ("s", "sim", "y", "yes") else prompt_conn_physical("Origem")
+        
+        t_type = input("Destino é Docker? (s/N): ").strip().lower()
+        args.target = prompt_conn_docker("Destino") if t_type in ("s", "sim", "y", "yes") else prompt_conn_physical("Destino")
+
+        args.command = "backup-restore"
         args.func = do_backup_restore
 
     return args
