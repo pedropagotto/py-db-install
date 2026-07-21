@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 import sys
 import os
+import subprocess
 from pathlib import Path
 
 # Adiciona o diretório do projeto ao sys.path para podermos importar os módulos
@@ -10,6 +11,71 @@ sys.path.insert(0, str(Path(__file__).parent))
 import portainer_install
 import pg_main
 import kamal_ssl_config
+import pg_backup_restore
+
+
+class TestPgBackupRestore(unittest.TestCase):
+
+    @patch("getpass.getpass", return_value="secretpass")
+    @patch("builtins.input")
+    def test_prompt_connection_details(self, mock_input, mock_getpass):
+        # Simula as entradas do usuário: host, port, db, user
+        mock_input.side_effect = ["aurora.aws.com", "5432", "mydb", "myuser"]
+        
+        conn = pg_backup_restore.prompt_connection_details("source")
+        
+        self.assertEqual(conn["type"], "local")
+        self.assertEqual(conn["host"], "aurora.aws.com")
+        self.assertEqual(conn["port"], 5432)
+        self.assertEqual(conn["database"], "mydb")
+        self.assertEqual(conn["user"], "myuser")
+        self.assertEqual(conn["password"], "secretpass")
+
+    @patch("pg_backup_restore.run_pg_tool")
+    def test_do_backup_local_type_valid(self, mock_run_pg_tool):
+        args = MagicMock()
+        args.source = {
+            "type": "local",
+            "host": "aurora.aws.com",
+            "port": 5432,
+            "database": "mydb",
+            "user": "myuser",
+            "password": "secretpass"
+        }
+        args.backup_file = "/tmp/test.dump"
+        args.format = "custom"
+
+        pg_backup_restore.do_backup(args)
+
+        mock_run_pg_tool.assert_called_once_with(
+            "pg_dump",
+            ["-U", "myuser", "-h", "aurora.aws.com", "-p", "5432", "-d", "mydb", "-F", "c", "-b", "-v"],
+            "secretpass",
+            output_file="/tmp/test.dump"
+        )
+
+    @patch("pg_backup_restore.run_pg_tool")
+    def test_do_restore_local_type_valid(self, mock_run_pg_tool):
+        args = MagicMock()
+        args.target = {
+            "type": "local",
+            "host": "vps.hostinger.com",
+            "port": 5432,
+            "database": "mydb",
+            "user": "myuser",
+            "password": "secretpass"
+        }
+        args.backup_file = "/tmp/test.dump"
+        args.format = "custom"
+
+        pg_backup_restore.do_restore(args)
+
+        mock_run_pg_tool.assert_called_once_with(
+            "pg_restore",
+            ["-U", "myuser", "-h", "vps.hostinger.com", "-p", "5432", "-d", "mydb", "-v", "--clean", "--if-exists"],
+            "secretpass",
+            input_file="/tmp/test.dump"
+        )
 
 
 class TestKamalSSLConfig(unittest.TestCase):

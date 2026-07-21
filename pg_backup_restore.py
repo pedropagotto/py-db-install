@@ -69,6 +69,7 @@ def prompt_connection_details(prefix):
     password = getpass.getpass("5- Senha: ")
     
     return {
+        "type": "local",
         "host": host,
         "port": port,
         "database": db,
