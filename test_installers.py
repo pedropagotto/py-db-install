@@ -19,8 +19,8 @@ class TestPgBackupRestore(unittest.TestCase):
     @patch("getpass.getpass", return_value="secretpass")
     @patch("builtins.input")
     def test_prompt_connection_details(self, mock_input, mock_getpass):
-        # Simula as entradas do usuário: host, port, db, user
-        mock_input.side_effect = ["aurora.aws.com", "5432", "mydb", "myuser"]
+        # Simula as entradas do usuário: host, port, db, user, ssl_choice
+        mock_input.side_effect = ["aurora.aws.com", "5432", "mydb", "myuser", "1"]
         
         conn = pg_backup_restore.prompt_connection_details("source")
         
@@ -30,6 +30,7 @@ class TestPgBackupRestore(unittest.TestCase):
         self.assertEqual(conn["database"], "mydb")
         self.assertEqual(conn["user"], "myuser")
         self.assertEqual(conn["password"], "secretpass")
+        self.assertEqual(conn["sslmode"], "require")
 
     @patch("pg_backup_restore.run_pg_tool")
     def test_do_backup_local_type_valid(self, mock_run_pg_tool):
@@ -40,7 +41,8 @@ class TestPgBackupRestore(unittest.TestCase):
             "port": 5432,
             "database": "mydb",
             "user": "myuser",
-            "password": "secretpass"
+            "password": "secretpass",
+            "sslmode": "require"
         }
         args.backup_file = "/tmp/test.dump"
         args.format = "custom"
@@ -51,6 +53,7 @@ class TestPgBackupRestore(unittest.TestCase):
             "pg_dump",
             ["-U", "myuser", "-h", "aurora.aws.com", "-p", "5432", "-d", "mydb", "-F", "c", "-b", "-v"],
             "secretpass",
+            sslmode="require",
             output_file="/tmp/test.dump"
         )
 
@@ -63,7 +66,8 @@ class TestPgBackupRestore(unittest.TestCase):
             "port": 5432,
             "database": "mydb",
             "user": "myuser",
-            "password": "secretpass"
+            "password": "secretpass",
+            "sslmode": "prefer"
         }
         args.backup_file = "/tmp/test.dump"
         args.format = "custom"
@@ -74,6 +78,7 @@ class TestPgBackupRestore(unittest.TestCase):
             "pg_restore",
             ["-U", "myuser", "-h", "vps.hostinger.com", "-p", "5432", "-d", "mydb", "-v", "--clean", "--if-exists"],
             "secretpass",
+            sslmode="prefer",
             input_file="/tmp/test.dump"
         )
 

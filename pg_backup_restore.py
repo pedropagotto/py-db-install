@@ -30,11 +30,13 @@ def run_command(cmd, env=None, check=True, capture_output=False):
     return None
 
 
-def get_pg_env(password=None):
-    """Retorna cópia do ambiente com PGPASSWORD configurado."""
+def get_pg_env(password=None, sslmode=None):
+    """Retorna cópia do ambiente com PGPASSWORD e PGSSLMODE configurados."""
     env = os.environ.copy()
     if password:
         env["PGPASSWORD"] = password
+    if sslmode:
+        env["PGSSLMODE"] = sslmode
     return env
 
 
@@ -68,13 +70,29 @@ def prompt_connection_details(prefix):
     user = input("4- Usuário (padrão postgres): ").strip() or "postgres"
     password = getpass.getpass("5- Senha: ")
     
+    print("6- Usar SSL / Criptografia no PostgreSQL?")
+    print("   [1] Sim (Exigido / RDS Aurora / Cloud - sslmode=require)")
+    print("   [2] Não (Desativado - sslmode=disable)")
+    print("   [3] Opcional (Preferencial - sslmode=prefer)")
+    
+    default_opt = "1" if "rds.amazonaws.com" in host else "3"
+    ssl_choice = input(f"   Escolha uma opção [1-3] (padrão: {default_opt}): ").strip() or default_opt
+    
+    if ssl_choice == "1":
+        sslmode = "require"
+    elif ssl_choice == "2":
+        sslmode = "disable"
+    else:
+        sslmode = "prefer"
+
     return {
         "type": "local",
         "host": host,
         "port": port,
         "database": db,
         "user": user,
-        "password": password if password else None
+        "password": password if password else None,
+        "sslmode": sslmode
     }
 
 
@@ -88,7 +106,7 @@ def prompt_backup_path():
     return path
 
 
-def run_pg_tool(tool_name, cmd_args, password=None, input_file=None, output_file=None):
+def run_pg_tool(tool_name, cmd_args, password=None, sslmode=None, input_file=None, output_file=None):
     """
     Executa um comando do Postgres (pg_dump, pg_restore, psql).
     Tenta executar localmente. Se não encontrar o executável local, tenta executar via docker run.
@@ -96,7 +114,7 @@ def run_pg_tool(tool_name, cmd_args, password=None, input_file=None, output_file
     # 1. Tenta localmente
     if shutil.which(tool_name) is not None:
         cmd = [tool_name] + cmd_args
-        env = get_pg_env(password)
+        env = get_pg_env(password, sslmode)
         if input_file:
             print(f"[INFO] Executando local: {' '.join(cmd)} < {input_file}")
             with open(input_file, "rb") as f_in:
@@ -116,6 +134,8 @@ def run_pg_tool(tool_name, cmd_args, password=None, input_file=None, output_file
         docker_cmd = ["docker", "run", "--rm", "-i"]
         if password:
             docker_cmd.extend(["-e", f"PGPASSWORD={password}"])
+        if sslmode:
+            docker_cmd.extend(["-e", f"PGSSLMODE={sslmode}"])
         
         # Conecta na rede do host para acessar localhost do próprio host de forma transparente
         docker_cmd.append("--network=host")
@@ -160,7 +180,7 @@ def do_backup(args):
         cmd = build_docker_cmd(source["container_name"], ["pg_dump"] + pg_dump_cmd_args, source.get("password"))
         print(f"[INFO] Backup do container {source['container_name']} para {backup_file}")
         with open(backup_file, "wb") as f:
-            env = get_pg_env(source.get("password"))
+            env = get_pg_env(source.get("password"), source.get("sslmode"))
             proc = subprocess.Popen(
                 cmd,
                 env=env,
@@ -173,7 +193,7 @@ def do_backup(args):
                 sys.exit(1)
     else:
         # local / remote server
-        run_pg_tool("pg_dump", pg_dump_cmd_args, source.get("password"), output_file=backup_file)
+        run_pg_tool("pg_dump", pg_dump_cmd_args, source.get("password"), sslmode=source.get("sslmode"), output_file=backup_file)
 
     print(f"[SUCCESS] Backup concluído: {backup_file}")
 
@@ -196,9 +216,9 @@ def do_restore(args):
         ]
         if target["type"] == "docker":
             cmd = build_docker_cmd(target["container_name"], ["pg_restore"] + pg_restore_cmd_args + [backup_file], target.get("password"))
-            run_command(cmd, env=get_pg_env(target.get("password")))
+            run_command(cmd, env=get_pg_env(target.get("password"), target.get("sslmode")))
         else:
-            run_pg_tool("pg_restore", pg_restore_cmd_args, target.get("password"), input_file=backup_file)
+            run_pg_tool("pg_restore", pg_restore_cmd_args, target.get("password"), sslmode=target.get("sslmode"), input_file=backup_file)
     else:
         # plain SQL - usa psql
         psql_cmd_args = [
@@ -210,9 +230,9 @@ def do_restore(args):
         ]
         if target["type"] == "docker":
             cmd = build_docker_cmd(target["container_name"], ["psql"] + psql_cmd_args + ["-f", backup_file], target.get("password"))
-            run_command(cmd, env=get_pg_env(target.get("password")))
+            run_command(cmd, env=get_pg_env(target.get("password"), target.get("sslmode")))
         else:
-            run_pg_tool("psql", psql_cmd_args, target.get("password"), input_file=backup_file)
+            run_pg_tool("psql", psql_cmd_args, target.get("password"), sslmode=target.get("sslmode"), input_file=backup_file)
 
     print(f"[SUCCESS] Restore concluído no alvo.")
 
