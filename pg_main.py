@@ -33,18 +33,54 @@ def print_menu():
     print("DATABASE PG - FERRAMENTA PRINCIPAL ALL-IN-ONE")
     print("=" * 60)
     print("Escolha a operação que deseja executar:")
-    print("  1. Backup / Restore de PostgreSQL")
-    print("  2. Instalar PostgreSQL completo pronto para produção")
-    print("  3. Instalar Docker CE (Debian/Ubuntu)")
-    print("  4. Instalar Kamal (Debian/Ubuntu)")
-    print("  5. Instalar Portainer CE (Debian/Ubuntu)")
-    print("  6. Instalação Completa All-in-One (PostgreSQL + Docker + Kamal + Portainer)")
-    print("  7. Configurar SSL Let's Encrypt no Kamal (Compartilhável)")
-    print("  8. Recuperar / Resetar senhas locais de usuários PostgreSQL (via sudo/peer)")
-    print("  9. Criar novo usuário PostgreSQL (Owner, Readonly, Writer)")
-    print(" 10. Redefinir senha de um usuário PostgreSQL (Remoto / RDS / Bare-metal)")
+    print("  1. Gerenciamento & Operações PostgreSQL (Backup, Restore, Usuários, Instalação)")
+    print("  2. Instalar Docker CE (Debian/Ubuntu)")
+    print("  3. Instalar Kamal (Debian/Ubuntu)")
+    print("  4. Instalar Portainer CE (Debian/Ubuntu)")
+    print("  5. Instalação Completa All-in-One (PostgreSQL + Docker + Kamal + Portainer)")
+    print("  6. Configurar SSL Let's Encrypt no Kamal (Compartilhável)")
     print("  0. Sair")
     print("=" * 60)
+
+
+def print_postgres_menu():
+    """Exibe o submenu de operações do PostgreSQL."""
+    print("\n" + "=" * 60)
+    print("OPERAÇÕES E GERENCIAMENTO POSTGRESQL")
+    print("=" * 60)
+    print("  1. Backup / Restore de Banco de Dados")
+    print("  2. Criar Novo Usuário PostgreSQL (Owner, Readonly, Writer)")
+    print("  3. Redefinir Senha de Usuário PostgreSQL (Remoto / RDS / VPS)")
+    print("  4. Instalar PostgreSQL Completo Pronto para Produção (Local/Bare-metal)")
+    print("  5. Resetar Senhas de Usuários Locais (via sudo / peer)")
+    print("  0. Voltar ao Menu Principal")
+    print("=" * 60)
+
+
+def run_postgres_submenu():
+    """Gerencia o submenu interativo de PostgreSQL."""
+    while True:
+        print_postgres_menu()
+        try:
+            choice = input("Digite sua escolha [0-5]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nVoltando ao menu principal...")
+            break
+
+        if choice == "1":
+            run_backup_restore()
+        elif choice == "2":
+            run_create_user()
+        elif choice == "3":
+            run_reset_user_password()
+        elif choice == "4":
+            run_install()
+        elif choice == "5":
+            run_reset_passwords()
+        elif choice == "0":
+            break
+        else:
+            print("[ERRO] Opção inválida. Tente novamente.")
 
 
 def run_backup_restore(extra_args=None):
@@ -315,31 +351,23 @@ def main():
     while True:
         print_menu()
         try:
-            choice = input("Digite sua escolha [0-10]: ").strip()
+            choice = input("Digite sua escolha [0-6]: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\nSaindo...")
             break
 
         if choice == "1":
-            run_backup_restore()
+            run_postgres_submenu()
         elif choice == "2":
-            run_install()
-        elif choice == "3":
             run_docker_install()
-        elif choice == "4":
+        elif choice == "3":
             run_kamal_install()
-        elif choice == "5":
+        elif choice == "4":
             run_portainer_install()
-        elif choice == "6":
+        elif choice == "5":
             run_all_in_one()
-        elif choice == "7":
+        elif choice == "6":
             run_kamal_ssl_config()
-        elif choice == "8":
-            run_reset_passwords()
-        elif choice == "9":
-            run_create_user()
-        elif choice == "10":
-            run_reset_user_password()
         elif choice == "0":
             print("Saindo da ferramenta principal. Até logo!")
             break
